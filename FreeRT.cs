@@ -15,6 +15,8 @@
 *      https://github.com/IIIaKa
 *      https://umod.org/user/IIIaKa
 *      https://codefling.com/iiiaka
+*      https://www.patreon.com/iiiaka
+*      https://boosty.to/iiiaka
 *  GitHub repository page: https://github.com/IIIaKa/FreeRT
 *  uMod plugin page: https://umod.org/plugins/free-rt
 *  uMod license: https://umod.org/plugins/free-rt#license
@@ -129,21 +131,21 @@ namespace Oxide.Plugins
 		{
 			if (door.isSecurityDoor && !door.IsOpen())
 			{
-				var crList = Pool.GetList<CardReader>();
+				var crList = Pool.Get<List<CardReader>>();
 				Vis.Entities(door.transform.position, 6f, crList);
 				if (crList.Any())
 					TryOpenDoor(crList[0], player);
-				Pool.FreeList(ref crList);
+				Pool.FreeUnmanaged(ref crList);
 			}
 		}
 		
 		void OnSwitchToggled(ElectricSwitch electricSwitch, BasePlayer player)
         {
-			var crList = Pool.GetList<CardReader>();
+			var crList = Pool.Get<List<CardReader>>();
             Vis.Entities(electricSwitch.transform.position, 2f, crList);
             if (crList.Any())
                 TryOpenDoor(crList[0], player);
-            Pool.FreeList(ref crList);
+            Pool.FreeUnmanaged(ref crList);
         }
 		
 		void OnButtonPress(PressButton button, BasePlayer player)
