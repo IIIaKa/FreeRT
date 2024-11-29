@@ -15,13 +15,18 @@
 *      https://github.com/IIIaKa
 *      https://umod.org/user/IIIaKa
 *      https://codefling.com/iiiaka
+*      https://lone.design/vendor/iiiaka/
 *      https://www.patreon.com/iiiaka
 *      https://boosty.to/iiiaka
 *  GitHub repository page: https://github.com/IIIaKa/FreeRT
+*  
 *  uMod plugin page: https://umod.org/plugins/free-rt
 *  uMod license: https://umod.org/plugins/free-rt#license
+*  
 *  Codefling plugin page: https://codefling.com/plugins/free-rt
 *  Codefling license: https://codefling.com/plugins/free-rt?tab=downloads_field_4
+*  
+*  Lone.Design plugin page: https://lone.design/product/free-rt/
 *
 *  Copyright © 2020-2024 IIIaKa
 */
@@ -32,10 +37,11 @@ using System.Linq;
 using Facepunch;
 using Newtonsoft.Json;
 using Oxide.Core;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Free RT", "IIIaKa", "0.1.7")]
+	[Info("Free RT", "IIIaKa", "0.1.8")]
 	[Description("A simple plugin that allows players with permissions to open card-locked doors in Rad Towns without a card.")]
 	class FreeRT : RustPlugin
 	{
@@ -50,6 +56,9 @@ namespace Oxide.Plugins
 		{
 			[JsonProperty(PropertyName = "Is it worth showing messages to players who don't have permissions?")]
 			public bool ShowMessage = true;
+			
+			[JsonProperty(PropertyName = "Time in seconds(1-10) after which the door will close(hinged doors only)")]
+            public float CloseTime = 5f;
 			
 			public Oxide.Core.VersionNumber Version;
 		}
@@ -70,7 +79,10 @@ namespace Oxide.Plugins
 				_config.Version = Version;
 				PrintWarning($"The configuration file has been successfully updated to version {_config.Version}!");
             }
-            SaveConfig();
+			
+			_config.CloseTime = Mathf.Clamp(_config.CloseTime, 1f, 10f);
+			
+			SaveConfig();
         }
 		
 		protected override void SaveConfig() => Config.WriteObject(_config);
@@ -92,7 +104,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region ~Methods~
-		private bool TryOpenDoor(CardReader cardReader, BasePlayer player)
+		private bool TryOpenDoor(CardReader cardReader, BasePlayer player, Door door = null)
         {
 			bool canOpen = false;
 			if (permission.UserHasPermission(player.UserIDString, PERMISSION_ALL))
@@ -119,7 +131,19 @@ namespace Oxide.Plugins
             }
 
             if (canOpen)
-                cardReader.GrantCard();
+			{
+				if (door == null)
+					cardReader.GrantCard();
+				else
+                {
+					door.SetFlag(BaseEntity.Flags.Open, true);
+                    timer.Once(_config.CloseTime, () =>
+					{
+						if (door != null && (cardReader == null || !cardReader.HasFlag(BaseEntity.Flags.On)))
+							door.SetFlag(BaseEntity.Flags.Open, false);
+					});
+				}
+			}
             else if (_config.ShowMessage)
                 player.ChatMessage(lang.GetMessage(Str_MsgNotAllowed, this, player.UserIDString));
 			return canOpen;
@@ -134,7 +158,7 @@ namespace Oxide.Plugins
 				var crList = Pool.Get<List<CardReader>>();
 				Vis.Entities(door.transform.position, 6f, crList);
 				if (crList.Any())
-					TryOpenDoor(crList[0], player);
+					TryOpenDoor(crList[0], player, door);
 				Pool.FreeUnmanaged(ref crList);
 			}
 		}
