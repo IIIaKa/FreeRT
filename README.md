@@ -5,20 +5,6 @@ A simple plugin that allows **players with permissions to open card-locked doors
 - **Nuclear Missile Silo**: Opens **by pressing a button**.  
 **P.S.** You can also grant temporary permissions using the [**TemporaryPermissions**](https://github.com/IIIaKa/TemporaryPermissions) plugin.
 
-## Contacts
-**Telegram:** https://t.me/iiiaka  
-**Discord:** @iiiaka  
-**GitHub:** https://github.com/IIIaKa  
-**uMod:** https://umod.org/user/IIIaKa  
-**Codefling:** https://codefling.com/iiiaka  
-**GitHub repository page:** https://github.com/IIIaKa/FreeRT
-
-## Donations
-
-**USDT TRC20:** `TLN9Tsrdmt96yFCXZTfh4NLtyzWYGkqTA3`  
-**USDT TON:** `UQDma5Ovkk7M9Qve-4P2njmrgSXZQdACU0gLCGNEgkXDlngn`  
-**TON:** `UQDma5Ovkk7M9Qve-4P2njmrgSXZQdACU0gLCGNEgkXDlngn`
-
 ## Permissions
 
 - **`freert.all`** - Allows players to open **all** card-locked doors without a card;
@@ -31,10 +17,11 @@ A simple plugin that allows **players with permissions to open card-locked doors
 ```json
 {
   "Is it worth showing messages to players who don't have permissions?": true,
+  "Time in seconds(1-10) after which the door will close(hinged doors only)": 5.0,
   "Version": {
     "Major": 0,
     "Minor": 1,
-    "Patch": 7
+    "Patch": 8
   }
 }
 ```
