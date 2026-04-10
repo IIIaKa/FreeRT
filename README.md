@@ -17,11 +17,14 @@ A simple plugin that allows **players with permissions to open card-locked doors
 ```json
 {
   "Is it worth showing messages to players who don't have permissions?": true,
+  "Is it worth enabling GameTips for messages?": true,
+  "Is it worth using Notify plugins for messages instead of the vanilla UI?": true,
+  "Specify the message type for notify": 1,
   "Time in seconds(1-10) after which the door will close(hinged doors only)": 5.0,
   "Version": {
     "Major": 0,
     "Minor": 1,
-    "Patch": 8
+    "Patch": 9
   }
 }
 ```

@@ -28,25 +28,31 @@
 *  
 *  Lone.Design plugin page: https://lone.design/product/free-rt/
 *
-*  Copyright © 2020-2024 IIIaKa
+*  Copyright © 2020-2026 IIIaKa
 */
 
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using Facepunch;
+using System.Collections.Generic;
 using Newtonsoft.Json;
-using Oxide.Core;
+using Facepunch;
 using UnityEngine;
+using Oxide.Core;
+using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-	[Info("Free RT", "IIIaKa", "0.1.8")]
+	[Info("Free RT", "IIIaKa", "0.1.9")]
 	[Description("A simple plugin that allows players with permissions to open card-locked doors in Rad Towns without a card.")]
 	class FreeRT : RustPlugin
 	{
-		#region ~Variables~
-		private const string PERMISSION_ALL = "freert.all", PERMISSION_GREEN = "freert.green", PERMISSION_BLUE = "freert.blue", PERMISSION_RED = "freert.red", Str_MsgNotAllowed = "MsgNotAllowed";
+		[PluginReference]
+        private Plugin  NCP, UINotify;
+
+        #region ~Variables~
+		private bool _ncpIsLoaded = false, _uiNotifyIsLoaded = false;
+        private const string PERMISSION_ALL = "freert.all", PERMISSION_GREEN = "freert.green", PERMISSION_BLUE = "freert.blue", PERMISSION_RED = "freert.red";
 		#endregion
 		
 		#region ~Configuration~
@@ -56,6 +62,15 @@ namespace Oxide.Plugins
 		{
 			[JsonProperty(PropertyName = "Is it worth showing messages to players who don't have permissions?")]
 			public bool ShowMessage = true;
+			
+			[JsonProperty(PropertyName = "Is it worth enabling GameTips for messages?")]
+            public bool GameTips_Enabled = true;
+			
+			[JsonProperty(PropertyName = "Is it worth using Notify plugins for messages instead of the vanilla UI?")]
+            public bool Notify_Enabled = true;
+
+            [JsonProperty(PropertyName = "Specify the message type for notify")]
+            public int Notify_Type = 1;
 			
 			[JsonProperty(PropertyName = "Time in seconds(1-10) after which the door will close(hinged doors only)")]
             public float CloseTime = 5f;
@@ -75,7 +90,10 @@ namespace Oxide.Plugins
             }
             else if (_config.Version < Version)
             {
-				PrintWarning($"Your configuration file version({_config.Version}) is outdated. Updating it to {Version}.");
+				PrintWarning($"Your configuration file version({_config.Version}) is outdated. Updating it to {Version}...");
+				string cfgPath = $"{Interface.Oxide.ConfigDirectory}{Path.DirectorySeparatorChar}{Name}.json";
+                if (File.Exists(cfgPath))
+                    File.Move(cfgPath, $"{Interface.Oxide.ConfigDirectory}{Path.DirectorySeparatorChar}_old_{Name}({_config.Version}).json");
 				_config.Version = Version;
 				PrintWarning($"The configuration file has been successfully updated to version {_config.Version}!");
             }
@@ -104,70 +122,85 @@ namespace Oxide.Plugins
         #endregion
 
         #region ~Methods~
-		private bool TryOpenDoor(CardReader cardReader, BasePlayer player, Door door = null)
+		private void TryOpenDoor(CardReader cardReader, BasePlayer player, Door door = null)
         {
-			bool canOpen = false;
-			if (permission.UserHasPermission(player.UserIDString, PERMISSION_ALL))
-				canOpen = true;
-            else
-            {
+			bool canOpen = permission.UserHasPermission(player.UserIDString, PERMISSION_ALL);
+			if (!canOpen)
+			{
                 switch (cardReader.accessLevel)
                 {
                     case 1:
-                        if (permission.UserHasPermission(player.UserIDString, PERMISSION_GREEN))
-                            canOpen = true;
-                        break;
+						canOpen = permission.UserHasPermission(player.UserIDString, PERMISSION_GREEN);
+						break;
                     case 2:
-                        if (permission.UserHasPermission(player.UserIDString, PERMISSION_BLUE))
-                            canOpen = true;
-                        break;
+						canOpen = permission.UserHasPermission(player.UserIDString, PERMISSION_BLUE);
+						break;
                     case 3:
-                        if (permission.UserHasPermission(player.UserIDString, PERMISSION_RED))
-                            canOpen = true;
-                        break;
+						canOpen = permission.UserHasPermission(player.UserIDString, PERMISSION_RED);
+						break;
                     default:
                         break;
                 }
             }
-
-            if (canOpen)
+			if (!canOpen)
 			{
-				if (door == null)
-					cardReader.GrantCard();
-				else
+				if (!_config.ShowMessage)
+					return;
+				
+				string text = lang.GetMessage("MsgNotAllowed", this, player.UserIDString);
+				if (_config.Notify_Enabled)
                 {
-					door.SetFlag(BaseEntity.Flags.Open, true);
-                    timer.Once(_config.CloseTime, () =>
-					{
-						if (door != null && (cardReader == null || !cardReader.HasFlag(BaseEntity.Flags.On)))
-							door.SetFlag(BaseEntity.Flags.Open, false);
-					});
-				}
+					if (_ncpIsLoaded)
+                    {
+                        NCP.Call("SendNotify", player, _config.Notify_Type, text);
+                        return;
+                    }
+                    if (_uiNotifyIsLoaded)
+                    {
+                        UINotify.Call("SendNotify", player, _config.Notify_Type, text);
+                        return;
+                    }
+                }
+				
+				if (_config.GameTips_Enabled)
+                    player.Command("gametip.showtoast", (int)GameTip.Styles.Error, text, string.Empty);
+                else
+                    player.ChatMessage(text);
+				return;
 			}
-            else if (_config.ShowMessage)
-                player.ChatMessage(lang.GetMessage(Str_MsgNotAllowed, this, player.UserIDString));
-			return canOpen;
-        }
+			
+			if (door == null)
+			{
+				cardReader.GrantCard();
+				return;
+			}
+			
+			door.SetFlag(BaseEntity.Flags.Open, true);
+            timer.Once(_config.CloseTime, () =>
+            {
+                if (door != null && (cardReader == null || !cardReader.HasFlag(BaseEntity.Flags.On)))
+                    door.SetFlag(BaseEntity.Flags.Open, false);
+            });
+		}
 		#endregion
 
 		#region ~Oxide Hooks~
 		void OnDoorKnocked(Door door, BasePlayer player)
 		{
-			if (door.isSecurityDoor && !door.IsOpen())
-			{
-				var crList = Pool.Get<List<CardReader>>();
-				Vis.Entities(door.transform.position, 6f, crList);
-				if (crList.Any())
-					TryOpenDoor(crList[0], player, door);
-				Pool.FreeUnmanaged(ref crList);
-			}
+			if (!door.isSecurityDoor || door.IsOpen())
+				return;
+			var crList = Pool.Get<List<CardReader>>();
+            Vis.Entities(door.transform.position, 6f, crList);
+            if (crList.Count > 0)
+                TryOpenDoor(crList[0], player, door);
+            Pool.FreeUnmanaged(ref crList);
 		}
 		
 		void OnSwitchToggled(ElectricSwitch electricSwitch, BasePlayer player)
         {
 			var crList = Pool.Get<List<CardReader>>();
             Vis.Entities(electricSwitch.transform.position, 2f, crList);
-            if (crList.Any())
+            if (crList.Count > 0)
                 TryOpenDoor(crList[0], player);
             Pool.FreeUnmanaged(ref crList);
         }
@@ -186,8 +219,26 @@ namespace Oxide.Plugins
 			}
 		}
 		
+		void OnPluginLoaded(Plugin plugin)
+        {
+			if (plugin == NCP)
+                _ncpIsLoaded = NCP != null && NCP.IsLoaded;
+            else if (plugin == UINotify)
+                _uiNotifyIsLoaded = UINotify != null && UINotify.IsLoaded;
+        }
+		
+		void OnPluginUnloaded(Plugin plugin)
+        {
+			if (plugin.Name == "NCP")
+                _ncpIsLoaded = false;
+            else if (plugin.Name == "UINotify")
+                _uiNotifyIsLoaded = false;
+		}
+		
 		void Init()
         {
+			Unsubscribe(nameof(OnPluginLoaded));
+			Unsubscribe(nameof(OnPluginUnloaded));
 			Unsubscribe(nameof(OnDoorKnocked));
 			Unsubscribe(nameof(OnSwitchToggled));
 			Unsubscribe(nameof(OnButtonPress));
@@ -198,18 +249,19 @@ namespace Oxide.Plugins
 		}
 		
 		void OnServerInitialized(bool initial)
-		{
-			Subscribe(nameof(OnDoorKnocked));
+        {
+			_ncpIsLoaded = NCP != null && NCP.IsLoaded;
+            _uiNotifyIsLoaded = UINotify != null && UINotify.IsLoaded;
+            Subscribe(nameof(OnDoorKnocked));
 			Subscribe(nameof(OnSwitchToggled));
 			Subscribe(nameof(OnButtonPress));
+			Subscribe(nameof(OnPluginLoaded));
+			Subscribe(nameof(OnPluginUnloaded));
+			if (_config.Notify_Enabled && !_ncpIsLoaded && !_uiNotifyIsLoaded)
+                PrintWarning("You have Notify plugin support enabled, but none were found!\n* https://codefling.com/plugins/ncp\n* https://umod.org/plugins/ui-notify");
 		}
-		#endregion
-
-		#region ~Unload~
-		void Unload()
-		{
-			_config = null;
-		}
+		
+		void Unload() => _config = null;
 		#endregion
 	}
 }
