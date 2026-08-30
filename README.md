@@ -24,7 +24,7 @@ A simple plugin that allows **players with permissions to open card-locked doors
   "Version": {
     "Major": 0,
     "Minor": 1,
-    "Patch": 9
+    "Patch": 10
   }
 }
 ```

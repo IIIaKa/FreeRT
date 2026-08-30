@@ -33,17 +33,15 @@
 
 using System;
 using System.IO;
-using System.Linq;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Facepunch;
 using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-	[Info("Free RT", "IIIaKa", "0.1.9")]
+	[Info("Free RT", "IIIaKa", "0.1.10")]
 	[Description("A simple plugin that allows players with permissions to open card-locked doors in Rad Towns without a card.")]
 	class FreeRT : RustPlugin
 	{
@@ -175,12 +173,12 @@ namespace Oxide.Plugins
 				return;
 			}
 			
-			door.SetFlag(BaseEntity.Flags.Open, true);
-            timer.Once(_config.CloseTime, () =>
+			door.SetFlagLocal(BaseEntity.Flags.Open, true);
+			timer.Once(_config.CloseTime, () =>
             {
                 if (door != null && (cardReader == null || !cardReader.HasFlag(BaseEntity.Flags.On)))
-                    door.SetFlag(BaseEntity.Flags.Open, false);
-            });
+					door.SetFlagLocal(BaseEntity.Flags.Open, false);
+			});
 		}
 		#endregion
 
@@ -189,21 +187,19 @@ namespace Oxide.Plugins
 		{
 			if (!door.isSecurityDoor || door.IsOpen())
 				return;
-			var crList = Pool.Get<List<CardReader>>();
-            Vis.Entities(door.transform.position, 6f, crList);
+			using PooledList<CardReader> crList = Facepunch.Pool.Get<PooledList<CardReader>>();
+			Vis.Entities(door.transform.position, 6f, crList);
             if (crList.Count > 0)
                 TryOpenDoor(crList[0], player, door);
-            Pool.FreeUnmanaged(ref crList);
 		}
 		
 		void OnSwitchToggled(ElectricSwitch electricSwitch, BasePlayer player)
         {
-			var crList = Pool.Get<List<CardReader>>();
-            Vis.Entities(electricSwitch.transform.position, 2f, crList);
+			using PooledList<CardReader> crList = Facepunch.Pool.Get<PooledList<CardReader>>();
+			Vis.Entities(electricSwitch.transform.position, 2f, crList);
             if (crList.Count > 0)
                 TryOpenDoor(crList[0], player);
-            Pool.FreeUnmanaged(ref crList);
-        }
+		}
 		
 		void OnButtonPress(PressButton button, BasePlayer player)
         {
